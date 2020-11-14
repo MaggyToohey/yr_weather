@@ -8,7 +8,7 @@
 #include <iostream>
 #include <string>
 #include <cstring>
-//#include <unistd.h>
+#include <sstream>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -19,7 +19,7 @@ using json = nlohmann::json;
 
 // Callback for libcurl to write the data
 static int dataWriterCallback(char *data, size_t size, size_t nmemb,
-    std::string *writerData)
+                              std::string *writerData)
 {
     if (writerData == NULL)
     {
@@ -37,42 +37,83 @@ json _forecast_data_json;
 // Buffer to store curl error strings
 static char errorBuffer[CURL_ERROR_SIZE];
 
-void YrForecast::setLatLongAlt()
+void YrForecast::getUserCoords()
 {
-    float latitude, longitude = 0;
+    float latitude, longitude = 0.0;
     int altitude = 0;
-    std::cout << "Enter latitude: " << std::endl;
-    // Latitude precision must not exceed 4 decimal places
-    std::cin >> std::fixed >> std::setprecision(4) >> latitude;
-    std::cout << "Enter longitude: " << std::endl;
-    // Longitude precision must not exceed 4 decimal places
-    std::cin >> std::fixed >> std::setprecision(4) >> longitude;
-    std::cout << "Enter integer value for altitude: " << std::endl;
-    std::cin >> altitude;
+    std::string lat_str, lon_str, alt_str = "";
 
-    // Lat and Long are required
-    _latitude = latitude;
-    _longitude = longitude;
+    // Lat and long are required for URL
+    while (true)
+    {
+        std::cout << "Please enter lat: ";
+        std::getline(std::cin, lat_str);
+        // Convert string to float
+        std::stringstream myStream(lat_str);
+        if (myStream >> latitude)
+            break;
+        std::cout << "Latitude required as float, please try again" << std::endl;
+    }
+    // Check value is valid
+    if ((-85.0 <= latitude && latitude <= 85.0))
+    {
+        _latitude = latitude;
+    }
+    else
+    {
+        throw "Latitude out of bounds!";
+    }
 
-    // Alt not required. Cast to int so request is OK
-    _altitude = static_cast<int>(altitude);
+    while (true)
+    {
+        std::cout << "Please enter Longitude: ";
+        std::getline(std::cin, lon_str);
+        // Convert string to float
+        std::stringstream myStream(lon_str);
+        if (myStream >> longitude)
+            break;
+        std::cout << "'\n' Longitude required as float, please try again" << std::endl;
+    }
+    // Check value is valid
+    if ((-180.0 <= longitude && longitude <= 180.0))
+    {
+        _longitude = longitude;
+    }
+    else
+    {
+        throw "Longitude out of bounds!";
+    }
+    std::cout << "Altitude: ";
+    std::getline(std::cin, alt_str);
+    if (alt_str.compare("\n") != 0)
+    {
+        std::stringstream myStream(alt_str);
+        myStream >> altitude;
+        _altitude = static_cast<int>(altitude);
+    }
+    else
+    {
+        // default is sea level;
+        _altitude = 0;
+    }
+    return;
 }
 
-bool YrForecast::createURL()
+void YrForecast::createURL()
 {
     /** Yr.no API requires URL of the form:
      * https://api.met.no/weatherapi/locationforecast/2.0/compact.
      * json?altitude=X&lat=Y&lon=Z
     */
-
     // Set coords as string
     std::string alt = "altitude=" + std::to_string(_altitude);
     std::string lat = "&lat=" + std::to_string(_latitude);
     std::string lon = "&lon=" + std::to_string(_longitude);
-    
     // Set URL based on the user input coords
     _coords_url = _base_url + alt + lat + lon;
-    return true;
+    _URL_complete = true;
+    std::cout << _coords_url << std::endl;
+    return;
 }
 
 bool YrForecast::populateForecastData()
@@ -82,7 +123,7 @@ bool YrForecast::populateForecastData()
     curl_global_init(CURL_GLOBAL_ALL);
 
     // Only need to made request if URL exists
-    if (createURL())
+    if (_URL_complete)
     {
 
         // Curl return code
@@ -153,14 +194,14 @@ bool YrForecast::populateForecastData()
     return false;
 }
 
-void YrForecast::parseWeatherJSON()
+void YrForecast::parseForecastJSON()
 {
     _forecast_data_json = json::parse(_forecast_data);
-    json instant_details = 
+    json instant_details =
         _forecast_data_json["properties"]["timeseries"][0]["data"]["instant"]["details"];
-    json summary = 
+    json summary =
         _forecast_data_json["properties"]["timeseries"][0]["data"]["next_6_hours"]["summary"]["symbol_code"];
-    
+
     _current_weather.forecast_summary = summary.dump();
 
     _current_weather.air_pressure_at_sea_level = instant_details["air_pressure_at_sea_level"];
@@ -171,7 +212,6 @@ void YrForecast::parseWeatherJSON()
     _current_weather.wind_speed = instant_details["wind_speed"];
     _current_weather.precipitation_amount =
         _forecast_data_json["properties"]["timeseries"][0]["data"]["next_6_hours"]["details"]["precipitation_amount"];
-        
 
     return;
 }
@@ -179,29 +219,30 @@ void YrForecast::parseWeatherJSON()
 void YrForecast::printForecast()
 {
 
-    std::cout << "The weather summary for Lat: " << _latitude <<
-        " and Long: " << _longitude << " is: " <<
-        _current_weather.forecast_summary.c_str() << std::endl;
-    std::cout << "Temperature: " << _current_weather.temperature <<
-        std::endl;
-    std::cout << "Fraction of cloud cover: " <<
-        _current_weather.cloud_area_fraction << std::endl;
-    std::cout << "Relative humidity: " <<
-        _current_weather.relative_humidity << std::endl;
-    std::cout << "Wind Direction: " <<
-        _current_weather.wind_direction << std::endl;
+    std::cout << "The weather summary for lat " << _latitude << " and long " << _longitude << " is: " << _current_weather.forecast_summary.c_str() << std::endl;
+    std::cout << "Temperature: " << _current_weather.temperature << std::endl;
+    std::cout << "Fraction of cloud cover: " << _current_weather.cloud_area_fraction << std::endl;
+    std::cout << "Relative humidity: " << _current_weather.relative_humidity << std::endl;
+    std::cout << "Wind Direction: " << _current_weather.wind_direction << std::endl;
     std::cout << "Wind Speed: " << _current_weather.wind_speed << std::endl;
-    std::cout << "Precipitation over the next 6 hours: " <<
-        _current_weather.precipitation_amount << std::endl;
-
-    //std::cout << _forecast_data_json << std::endl;
+    std::cout << "Precipitation over the next 6 hours: " << _current_weather.precipitation_amount << std::endl;
 }
 
 void YrForecast::runProgram()
 {
-    setLatLongAlt();
+    try
+    {
+        getUserCoords();
+    }
+    catch (const char *coord_exception)
+    {
+        std::cerr << coord_exception << std::endl;
+        return;
+    }
     createURL();
     populateForecastData();
-    parseWeatherJSON();
+    parseForecastJSON();
     printForecast();
+
+    return;
 }

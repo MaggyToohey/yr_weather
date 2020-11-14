@@ -50,18 +50,18 @@ public:
 private:
 
     /**
-     * @brief Sets the latitude, longitude and altitude members, 
-     * from user input
+     * @brief Get the coordinates from user
      * @param none
-     * @returns none
+     * @return none
      */
-    void setLatLongAlt();
+    void getUserCoords();
+
     /**
      * @brief Create a URL based on location
      * @param none
      * @returns none
      */
-    bool createURL();
+    void createURL();
     /**
      * @brief Send request to yr.no and store result
      * @param none
@@ -73,7 +73,7 @@ private:
      * @param none
      * @returns none
      */
-    void parseWeatherJSON();
+    void parseForecastJSON();
     /**
      * @brief Print the forecast to console
      * @param none
@@ -89,11 +89,11 @@ private:
 	YrForecastStruct _current_weather;
 
     // Location data
-    // Lat and Long can be 4 dec places, defaults to Null Island
     float _latitude = 0.0;
     float _longitude = 0.0;
     // Altitude must be int, defaults to sea level;
-    int _altitude = 0;  
+    int _altitude = 0;
+    bool _URL_complete = false;
 };
 
 #endif //YR_FORECAST_H
