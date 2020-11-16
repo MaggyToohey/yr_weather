@@ -42,7 +42,7 @@ To use Yr weather app, do the following:
 3. Build folder: `mkdir build` followed by `cd build`
 4. Compile using CMake: `cmake ../ .` followed by `make`
 5. To run a demo exe `bash Demo`
-6. To run unit tests `bash Test`
+6. To run unit tests, ensure `test_weather_data.txt` is the one provided, and run `bash Test`
   
 ## Licence
 

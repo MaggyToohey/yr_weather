@@ -13,14 +13,14 @@
 #include <iomanip>
 
 #include <nlohmann/json.hpp>
+#include <curl/curl.h>
 
 
 namespace yr
 {
-
     /**
- * @brief Structure containing information about the forecast
- */
+    * @brief Structure containing information about the forecast
+    */
     struct YrForecastStruct
     {
         float air_pressure_at_sea_level;
@@ -34,8 +34,8 @@ namespace yr
     };
 
     /**
- * @brief Class to request weather data from yr.no based on user input location
- */
+     * @brief Class to request weather data from yr.no based on user input location
+     */
     class YrForecast
     {
 
@@ -56,9 +56,7 @@ namespace yr
         ~YrForecast() = default;
 
     /**
-     * @brief Starts the program calls
-     * @param none
-     * @returns none
+     * @brief Starts the program function calls
      */
     void runProgram();
     /**
@@ -69,29 +67,46 @@ namespace yr
     /**
      * @brief Parse JSON data returned from yr.no into struct
      */
-    void parseForecastJSON();
+    yr::YrForecastStruct parseForecastJSON(std::string forecast);
 
-    std::string getURL();
-    yr::YrForecastStruct getParsedData();
+    /**
+     * @brief Initialise the Curl object
+     */
+    void curlInit();
 
-    private:
-
-    
     /**
      * @brief Send request to yr.no and store result
+     * @param URL String containing the URL to send request to
+     * @return Forecast_data String containing forecast data in JSON format
      */
-    bool populateForecastData();
+    std::string populateForecastData(std::string url, CURL *easyhandle, CURLcode code);
+
+    /**
+     * @brief Get URL
+     */
+    std::string getURL();
+
+    bool _curl_init = false; // True once curl handle created
+
+    private:
     /**
      * @brief Print the forecast to console
      */
     void printForecast();
 
     // URL data
+    // Using YR.no API, LocationForecast 2.0
     const std::string _base_url = "https://api.met.no/weatherapi/locationforecast/2.0/compact.json?";
+    // Location specific URL
     std::string _coords_url;
+    // User Agent required by YR Terms of Service
+    std::string userAgent = "MyWeatherApp/0.1 github.com/MaggyToohey/yr_weather";
 
-    // Structs to hold parsed data
-    YrForecastStruct _current_weather;
+    // CURL data
+    CURLcode _code; // Curl status code
+    CURL *_easyhandle = NULL; // Pointer to curl handle
+
+    YrForecastStruct _current_weather; // Structs to hold parsed data
 
     // Location data
     float _latitude = 0.0;
@@ -110,6 +125,7 @@ namespace yr
         T coord;
         HandleGeoCoords() = default;
 
+        // validateLatitude int method:
         float validateLatitude(int coord)
         {
             std::cout << "Latitude entered: " << coord << std::endl;
@@ -126,6 +142,7 @@ namespace yr
                 exit(EXIT_FAILURE);
             }
         }
+        // validateLatitude float method:
         float validateLatitude(float coord)
         {
             std::cout << "Latitude entered: " << coord << std::endl;
@@ -142,6 +159,7 @@ namespace yr
                 exit(EXIT_FAILURE);
             }
         }
+        // validateLatitude double method:
         float validateLatitude(double coord)
         {
             std::cout << "Latitude entered: " << coord << std::endl;
@@ -159,6 +177,7 @@ namespace yr
                 exit(EXIT_FAILURE);
             }
         }
+        // validateLatitude string method:
         float validateLatitude(std::string coord)
         {
             std::cout << "Latitude entered: " << coord << std::endl;
@@ -168,7 +187,7 @@ namespace yr
             return 0.0;
         }
 
-        // Validate Longitude
+        // Validate Longitude int
         float validateLongitude(int coord)
         {
             std::cout << "Longitude entered: " << coord << std::endl;
@@ -185,6 +204,7 @@ namespace yr
                 exit(EXIT_FAILURE);
             }
         }
+        // Validate Longitude float
         float validateLongitude(float coord)
         {
             std::cout << "Longitude entered: " << coord << std::endl;
@@ -200,6 +220,7 @@ namespace yr
                 exit(EXIT_FAILURE);
             }
         }
+        // Validate Longitude double
         float validateLongitude(double coord)
         {
             std::cout << "Longitude entered: " << coord << std::endl;
@@ -216,6 +237,7 @@ namespace yr
                 exit(EXIT_FAILURE);
             }
         }
+        // Validate Longitude string
         float validateLongitude(std::string coord)
         {
             // String not accepted, set longitude as default
@@ -224,29 +246,35 @@ namespace yr
                 "setting to default, 0.0" << std::endl;
             return 0.0;
         }
-        // Validate Altitude
+        // Validate Altitude int
         int validateAltitude(int coord)
         {
             std::cout << "Altitude value entered: " << std::endl;
             return coord;
         }
+        // Validate Altitude float
         int validateAltitude(float coord)
         {
-            std::cout << "Altitude value entered: " << coord << std::endl;
+            std::cout << "Altitude value entered: " << coord;
+            std::cout << " but only integer values accepted so using ";
+            std::cout << static_cast<int>(coord) << std::endl;
             return static_cast<int>(coord);
         }
+        // Validate Altitude double
         int validateAltitude(double coord)
         {
-            std::cout << "Altitude value entered: " << coord << std::endl;
+            std::cout << "Altitude value entered: " << coord;
+            std::cout << " but only integer values accepted so using ";
+            std::cout << static_cast<int>(coord) << std::endl;
             return static_cast<int>(coord);
         }
+        // Validate Altitude string
         int validateAltitude(std::string coord)
         {
             std::cout << "Altitude value entered: " << coord << std::endl;
             std::cout << "String is not valid, ";
             std::cout << "using sea level as default." << std::endl;
             return 0;
-
         }
     };
 

@@ -6,6 +6,7 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include "YR_forecast.h"
 
 
@@ -17,7 +18,7 @@ int main() {
     std::cout << "and coordinates for Galway, Ireland are 53.2707 N, 9.0568 W" << std::endl;
     std::cin >> lat;
     std::cin >> lon;
-    std::cin >>alt;
+    std::cin >> alt;
     // Create a handler for lat
     yr::HandleGeoCoords<decltype(lat)> checkLatCoords;
     // Create a handler for lon
@@ -27,7 +28,8 @@ int main() {
     // Validate the coords before passing to Yr weather class
     auto lat_1 = checkLatCoords.validateLatitude(lat);
     auto lon_1 = checkLonCoords.validateLongitude(lon);
-    int alt_1 = checkAltCoords.validateAltitude(alt);
+    auto alt_1 = checkAltCoords.validateAltitude(alt);
+    // Create yr object
     yr::YrForecast weather_app (lat_1, lon_1, alt_1);
     weather_app.runProgram();
     return 0;

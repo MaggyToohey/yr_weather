@@ -10,8 +10,6 @@
 #include <cstring>
 #include <sstream>
 
-#include <curl/curl.h>
-
 
 #include "YR_forecast.h"
 
@@ -45,14 +43,17 @@ namespace yr
                     const int &altitude)
                     : _latitude{latitude} 
                     , _longitude{longitude}
-                    , _altitude{altitude} {}
+                    , _altitude{altitude} 
+                    {
+                        // Init curl handle
+                        curlInit();
+                    }
 
     void YrForecast::createURL()
     {
-        /** Yr.no API requires URL of the form:
-     * https://api.met.no/weatherapi/locationforecast/2.0/compact.
-     * json?altitude=X&lat=Y&lon=Z
-    */
+    /** Yr.no API requires URL of the form:
+     * https://api.met.no/weatherapi/locationforecast/2.0/compact.json?altitude=X&lat=Y&lon=Z
+     */
         // Set coords as string
         std::string alt = "altitude=" + std::to_string(_altitude);
         std::string lat = "&lat=" + std::to_string(_latitude);
@@ -62,123 +63,133 @@ namespace yr
         _URL_complete = true;
         return;
     }
-
-    bool YrForecast::populateForecastData()
+    /**
+     * @brief Initialise curl params
+     */
+    void YrForecast::curlInit()
     {
-
         // Setup libcurl global constant environment
         curl_global_init(CURL_GLOBAL_ALL);
 
-        // Only need to made request if URL exists
-        if (_URL_complete)
+        // Create a curl object, using easy interface since
+        // only single transfer is needed for this app
+        _easyhandle = curl_easy_init();
+        _curl_init = true;
+    }
+    /**
+     * @brief Send request to yr.no and store result
+     * @param URL String containing the URL to send request to
+     * @return Forecast_data String containing forecast data in JSON format
+     */
+    std::string YrForecast::populateForecastData(std::string url, CURL *easyhandle, CURLcode code)
+    {
+        if (_curl_init)
         {
-
-            // Curl return code
-            CURLcode code;
-
-            // Create a curl object, using easy interface since
-            // only single transfer is needed for this app
-            CURL *easyhandle = curl_easy_init();
-
-            // Check handle has been created
-            if (easyhandle == NULL)
+            static std::string forecast;
+            // Only need to made request if URL exists
+            if (_URL_complete)
             {
-                std::cout << "Failed to create CURL connection." << std::endl;
-                exit(EXIT_FAILURE);
+                // Check handle has been created
+                if (easyhandle == NULL)
+                {
+                    std::cout << "Failed to create CURL connection." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                // Set buffer for curl errors
+                code = curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, errorBuffer);
+                if (code != CURLE_OK)
+                {
+                    std::cout << "Failed to set error buffer " << code << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                // Set the URL
+                code = curl_easy_setopt(easyhandle, CURLOPT_URL, url.c_str());
+                if (code != CURLE_OK)
+                {
+                    std::cout << "Failed to set the URL. " << errorBuffer << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                // Set User Agent
+                code = curl_easy_setopt(easyhandle, CURLOPT_USERAGENT,
+                                        &userAgent);
+                if (code != CURLE_OK)
+                {
+                    std::cout << "Failed to set User Agent. " << errorBuffer << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                // Set the write callback in the curl handler
+                code = curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, dataWriterCallback);
+                if (code != CURLE_OK)
+                {
+                    std::cout << "Failed to set write function: " << errorBuffer;
+                    exit(EXIT_FAILURE);
+                }
+                // Set the forecast data storage in the handler
+                code = curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &forecast);
+                if (code != CURLE_OK)
+                {
+                    std::cout << "Failed to set the write data: " << errorBuffer;
+                    exit(EXIT_FAILURE);
+                }
+                // Send request to yr.no
+                code = curl_easy_perform(easyhandle);
+                // Clean up curl easy handle
+                curl_easy_cleanup(easyhandle);
+                if (code != CURLE_OK)
+                {
+                    std::cout << "Curl request not successful, error: " << errorBuffer;
+                    exit(EXIT_FAILURE);
+                }
+                return forecast;
             }
-
-            // Set the error buffer
-            code = curl_easy_setopt(easyhandle, CURLOPT_ERRORBUFFER, errorBuffer);
-            if (code != CURLE_OK)
-            {
-                std::cout << "Failed to set error buffer " << code << std::endl;
-                return false;
-            }
-
-            // Set the URL
-            code = curl_easy_setopt(easyhandle, CURLOPT_URL, _coords_url.c_str());
-            if (code != CURLE_OK)
-            {
-                std::cout << "Failed to set the URL. " << errorBuffer << std::endl;
-                return false;
-            }
-            // Set User Agent
-            code = curl_easy_setopt(easyhandle, CURLOPT_USERAGENT,
-                                    "MyWeatherApp/0.1 github.com/MaggyToohey/yr_weather");
-            if (code != CURLE_OK)
-            {
-                std::cout << "Failed to set User Agent. " << errorBuffer << std::endl;
-                return false;
-            }
-            // Set the write callback in the curl handler
-            code = curl_easy_setopt(easyhandle, CURLOPT_WRITEFUNCTION, dataWriterCallback);
-            if (code != CURLE_OK)
-            {
-                std::cout << "Failed to set write function: " << errorBuffer;
-                return false;
-            }
-            // Set the data storage in the handler
-            code = curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, &_forecast_data);
-            if (code != CURLE_OK)
-            {
-                std::cout << "Failed to set the write data: " << errorBuffer;
-                return false;
-            }
-            // Send request to yr.no
-            code = curl_easy_perform(easyhandle);
-            // Clean up curl easy handle
-            curl_easy_cleanup(easyhandle);
-
-            if (code != CURLE_OK)
-            {
-                std::cout << "Curl request not successful, error: " << errorBuffer;
-                exit(EXIT_FAILURE);
-            }
-            return true;
+            // Clean global environment in the case easy clean up is not executed
+            curl_global_cleanup();
+            return "Error, require URL to make curl request.\n";
         }
-        // Clean global environment in the case easy clean up is not executed
-        curl_global_cleanup();
-        return false;
+        return "Error, curl handle has not been initialised.\n";
     }
 
-    void YrForecast::parseForecastJSON()
+    yr::YrForecastStruct YrForecast::parseForecastJSON(std::string forecast)
     {
+        json forecast_json;
+        yr::YrForecastStruct weather;
+        // Try block for exceptions from nlohmann
         try
         {
-            _forecast_data_json = json::parse(_forecast_data);
+            forecast_json = json::parse(forecast);
         }
-        catch (...)
+        catch(...)
         {
             std::cout << "Exception thrown from nlohman, data parse failed." << std::endl;
         }
         json instant_details =
-            _forecast_data_json["properties"]["timeseries"][0]["data"]["instant"]["details"];
+            forecast_json["properties"]["timeseries"][0]["data"]["instant"]["details"];
         json summary =
-            _forecast_data_json["properties"]["timeseries"][0]["data"]["next_6_hours"]["summary"]["symbol_code"];
+            forecast_json["properties"]["timeseries"][0]["data"]["next_6_hours"]["summary"]["symbol_code"];
+        // Populate struct
+        weather.forecast_summary = summary.dump();
+        weather.air_pressure_at_sea_level = instant_details["air_pressure_at_sea_level"];
+        weather.temperature = instant_details["air_temperature"];
+        weather.cloud_area_fraction = instant_details["cloud_area_fraction"];
+        weather.relative_humidity = instant_details["relative_humidity"];
+        weather.wind_direction = instant_details["wind_from_direction"];
+        weather.wind_speed = instant_details["wind_speed"];
+        weather.precipitation_amount =
+            forecast_json["properties"]["timeseries"][0]["data"]["next_6_hours"]["details"]["precipitation_amount"];
 
-        _current_weather.forecast_summary = summary.dump();
-
-        _current_weather.air_pressure_at_sea_level = instant_details["air_pressure_at_sea_level"];
-        _current_weather.temperature = instant_details["air_temperature"];
-        _current_weather.cloud_area_fraction = instant_details["cloud_area_fraction"];
-        _current_weather.relative_humidity = instant_details["relative_humidity"];
-        _current_weather.wind_direction = instant_details["wind_from_direction"];
-        _current_weather.wind_speed = instant_details["wind_speed"];
-        _current_weather.precipitation_amount =
-            _forecast_data_json["properties"]["timeseries"][0]["data"]["next_6_hours"]["details"]["precipitation_amount"];
-
-        return;
+        return weather;   
     }
 
     void YrForecast::printForecast()
     {
         std::cout << std::endl;
-        std::cout << "------------" << std::endl;
+        std::cout << "-------------" << std::endl;
         std::cout << "YR WEATHER" << std::endl;
-        std::cout << "------------" << std::endl;
-        std::cout << "The weather summary for lat " << _latitude << " and long " << _longitude << " is: " << _current_weather.forecast_summary.c_str() << std::endl;
-        std::cout << std::endl;
-        std::cout << "Temperature: " << _current_weather.temperature << std::endl;
+        std::cout << "-------------" << std::endl;
+        std::cout << "\nThe summary for lat " << _latitude;
+        std::cout << " and long " << _longitude << " is: ";
+        std::cout << _current_weather.forecast_summary.c_str() << std::endl;
+        std::cout << "\nTemperature: " << _current_weather.temperature << std::endl;
         std::cout << "Fraction of cloud cover: " << _current_weather.cloud_area_fraction << std::endl;
         std::cout << "Relative humidity: " << _current_weather.relative_humidity << std::endl;
         std::cout << "Wind Direction: " << _current_weather.wind_direction << std::endl;
@@ -191,18 +202,16 @@ namespace yr
     std::string YrForecast::getURL(){
         return _coords_url;
     }
-
-    yr::YrForecastStruct YrForecast::getParsedData(){
-        return _current_weather;
-    }
-
     void YrForecast::runProgram()
     {
+        // Set _coords_url based on the class coordinate params
         createURL();
-        populateForecastData();
-        parseForecastJSON();
+        // Retrieve forecast data from yr.no
+        _forecast_data = populateForecastData(_coords_url, _easyhandle, _code);
+        // Parse forecast data into member struct
+        _current_weather = parseForecastJSON(_forecast_data);
+        // Print struct to screen
         printForecast();
-
         return;
     }
 } // namespace yr
