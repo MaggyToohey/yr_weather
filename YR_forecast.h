@@ -75,6 +75,11 @@ namespace yr
     void curlInit();
 
     /**
+     * @brief Cleanup the Curl object
+     */
+    void curlCleanUp();
+
+    /**
      * @brief Send request to yr.no and store result
      * @param URL String containing the URL to send request to
      * @return Forecast_data String containing forecast data in JSON format

@@ -77,6 +77,17 @@ namespace yr
         _curl_init = true;
     }
     /**
+     * @brief Cleanup curl params
+     */
+    void YrForecast::curlCleanUp()
+    {
+        // Clean up curl easy handle
+        curl_easy_cleanup(_easyhandle);
+
+        // Clean global environment in the case easy clean up is not executed
+        curl_global_cleanup();
+    }
+    /**
      * @brief Send request to yr.no and store result
      * @param URL String containing the URL to send request to
      * @return Forecast_data String containing forecast data in JSON format
@@ -133,8 +144,6 @@ namespace yr
                 }
                 // Send request to yr.no
                 code = curl_easy_perform(easyhandle);
-                // Clean up curl easy handle
-                curl_easy_cleanup(easyhandle);
                 if (code != CURLE_OK)
                 {
                     std::cout << "Curl request not successful, error: " << errorBuffer;
@@ -142,8 +151,6 @@ namespace yr
                 }
                 return forecast;
             }
-            // Clean global environment in the case easy clean up is not executed
-            curl_global_cleanup();
             return "Error, require URL to make curl request.\n";
         }
         return "Error, curl handle has not been initialised.\n";
@@ -212,6 +219,8 @@ namespace yr
         _current_weather = parseForecastJSON(_forecast_data);
         // Print struct to screen
         printForecast();
+        // Cleanup curl object
+        curlCleanUp();
         return;
     }
 } // namespace yr

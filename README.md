@@ -31,8 +31,11 @@ See https://github.com/google/googletest/blob/master/googletest/README.md for mo
 
 ### nlohmann
 
-The nlohmann library is required for JSON data parsing, please see https://github.com/nlohmann/json for details how to install.
-  
+The nlohmann library is required for JSON data parsing, please see 
+https://github.com/nlohmann/json for details how to install.
+
+Please ensure nlohmann minimum version 3.1.0 is used.
+
 ## Installation
 
 To use Yr weather app, do the following:
